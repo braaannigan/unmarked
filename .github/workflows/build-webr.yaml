@@ -1,0 +1,191 @@
+name: Build webR Package and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [webr-support]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/r-wasm/webr:main
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Build source package
+        run: |
+          cd ..
+          R CMD build --no-build-vignettes unmarked
+          mv unmarked_*.tar.gz unmarked/
+          cd unmarked
+          ls -la *.tar.gz
+      
+      - name: Install dependencies
+        run: |
+          Rscript -e 'install.packages(c("Rcpp", "reformulas", "RcppArmadillo", "RcppEigen", "lattice", "MASS", "Matrix", "TMB"), repos="https://repo.r-wasm.org")'
+      
+      - name: Build binary package
+        run: |
+          R CMD INSTALL --build unmarked_*.tar.gz
+          ls -la *.tgz || ls -la *.tar.gz
+      
+      - name: Create package repository structure
+        run: |
+          mkdir -p repo/bin/emscripten/contrib/4.5
+          cp unmarked_*.tgz repo/bin/emscripten/contrib/4.5/ 2>/dev/null || cp unmarked_*.tar.gz repo/bin/emscripten/contrib/4.5/
+          
+          # Create PACKAGES file
+          cd repo/bin/emscripten/contrib/4.5
+          cat > PACKAGES << 'EOF'
+          Package: unmarked
+          Version: 1.5.1.9002
+          Depends: R (>= 4.0)
+          Imports: graphics, lattice, MASS, Matrix, methods, parallel, Rcpp (>= 0.8.0), reformulas, stats, TMB (>= 1.7.18), utils
+          LinkingTo: Rcpp, RcppArmadillo, TMB, RcppEigen
+          License: GPL (>=3)
+          NeedsCompilation: yes
+          EOF
+          
+          cd ../../../../..
+      
+      - name: Create test page
+        run: |
+          cat > repo/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>unmarked for webR</title>
+              <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+                  #status { padding: 15px; border-radius: 8px; margin: 20px 0; }
+                  .loading { background: #fff3cd; border: 1px solid #ffc107; }
+                  .success { background: #d4edda; border: 1px solid #28a745; }
+                  .error { background: #f8d7da; border: 1px solid #dc3545; }
+                  #output { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+                  button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; margin: 5px; }
+                  button:disabled { background: #6c757d; }
+              </style>
+          </head>
+          <body>
+              <h1>unmarked for webR</h1>
+              <p>This page lets you test the <code>unmarked</code> R package running in your browser via webR.</p>
+              
+              <div id="status" class="loading">Loading webR...</div>
+              
+              <div>
+                  <button id="testBtn" onclick="runTest()" disabled>Run Occupancy Model</button>
+                  <button id="tmbBtn" onclick="runTMBTest()" disabled>Test TMB Engine</button>
+              </div>
+              
+              <h3>Output:</h3>
+              <pre id="output">Initializing...</pre>
+
+              <script type="module">
+                  import { WebR } from 'https://webr.r-wasm.org/latest/webr.mjs';
+                  
+                  const output = document.getElementById('output');
+                  const status = document.getElementById('status');
+                  const webR = new WebR();
+                  window.webR = webR;
+                  
+                  function log(msg) {
+                      output.textContent += msg + '\n';
+                      output.scrollTop = output.scrollHeight;
+                  }
+                  
+                  async function init() {
+                      try {
+                          await webR.init();
+                          log('✓ webR initialized');
+                          
+                          status.textContent = 'Installing dependencies...';
+                          const deps = ['lattice', 'MASS', 'Matrix', 'Rcpp', 'reformulas', 'TMB', 'RcppArmadillo', 'RcppEigen'];
+                          for (const pkg of deps) {
+                              log(`Installing ${pkg}...`);
+                              await webR.installPackages([pkg]);
+                          }
+                          log('✓ Dependencies installed');
+                          
+                          status.textContent = 'Installing unmarked...';
+                          const repoUrl = window.location.href.replace(/\/index\.html$/, '').replace(/\/$/, '');
+                          await webR.installPackages(['unmarked'], { repos: [repoUrl] });
+                          log('✓ unmarked installed');
+                          
+                          await webR.evalR('library(unmarked)');
+                          log('✓ library(unmarked) loaded!');
+                          
+                          status.className = 'success';
+                          status.textContent = '✅ Ready! Click a button to run a test.';
+                          document.getElementById('testBtn').disabled = false;
+                          document.getElementById('tmbBtn').disabled = false;
+                          
+                      } catch (err) {
+                          status.className = 'error';
+                          status.textContent = '❌ Error: ' + err.message;
+                          log('ERROR: ' + err.message);
+                      }
+                  }
+                  
+                  window.runTest = async function() {
+                      output.textContent = 'Running occupancy model...\n';
+                      try {
+                          const result = await webR.evalR(`
+                              set.seed(123)
+                              y <- matrix(rbinom(300, 1, 0.3), 100, 3)
+                              umf <- unmarkedFrameOccu(y = y)
+                              fm <- occu(~1 ~1, data = umf)
+                              capture.output(print(fm))
+                          `);
+                          log((await result.toArray()).join('\n'));
+                          log('\n✓ Test passed!');
+                      } catch (err) { log('ERROR: ' + err.message); }
+                  };
+                  
+                  window.runTMBTest = async function() {
+                      output.textContent = 'Running TMB engine test...\n';
+                      try {
+                          const result = await webR.evalR(`
+                              set.seed(123)
+                              y <- matrix(rbinom(300, 1, 0.3), 100, 3)
+                              umf <- unmarkedFrameOccu(y = y)
+                              fm <- occu(~1 ~1, data = umf, engine = "TMB")
+                              capture.output(print(fm))
+                          `);
+                          log((await result.toArray()).join('\n'));
+                          log('\n✓ TMB test passed!');
+                      } catch (err) { log('ERROR: ' + err.message); }
+                  };
+                  
+                  init();
+              </script>
+          </body>
+          </html>
+          HTMLEOF
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: repo
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
