@@ -65,4 +65,3 @@ export(gxhn, gxexp, gxhaz, dxhn, dxexp, dxhaz, drhn, drexp,
 export(shinyPower)
 
 useDynLib("unmarked", .registration=TRUE)
-useDynLib(unmarked_TMBExports)

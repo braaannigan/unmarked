@@ -89,7 +89,7 @@ goccu <- function(psiformula, phiformula, pformula, data,
   # Create TMB object
   tmb_mod <- TMB::MakeADFun(data = c(model = "tmb_goccu", dataList),
                             parameters = params,
-                            DLL = "unmarked_TMBExports", silent = TRUE)
+                            DLL = "unmarked", silent = TRUE)
 
   # Optimize TMB object, print and save results
   if(missing(starts) || is.null(starts)) starts <- tmb_mod$par

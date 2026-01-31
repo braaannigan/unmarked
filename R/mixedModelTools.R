@@ -213,7 +213,7 @@ fit_TMB <- function(model, data, params, random,
                             parameters = params,
                             random = random,
                             silent=TRUE,
-                            DLL = "unmarked_TMBExports")
+                            DLL = "unmarked")
   tmb_mod$starts_order <- starts_order
 
   opt <- optim(tmb_mod$par, fn=tmb_mod$fn, gr=tmb_mod$gr, method=method, ...)

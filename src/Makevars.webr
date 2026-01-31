@@ -1,17 +1,14 @@
-# --- TMB inline compilation for webR compatibility ---
+# --- TMB inline compilation for webR ---
 #
-# This Makevars compiles TMB code inline as part of the main package library,
-# following the approach used by glmmTMB. This avoids the TMB::compile() step
-# that fails during cross-compilation for WebAssembly.
-#
-# The -DTMBAD_FRAMEWORK flag enables TMB's automatic differentiation framework.
+# Same as Makevars but without OpenMP (not supported in WebAssembly).
+# rwasm looks for Makevars.webr for webR-specific builds.
 
 # TMB configuration
 PKG_CPPFLAGS = -DSTRICT_R_HEADERS -DTMBAD_FRAMEWORK
 
-# Libraries and flags
-PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(SHLIB_OPENMP_CXXFLAGS)
-PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
+# Libraries and flags (no OpenMP for WebAssembly)
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS)
+PKG_CXXFLAGS =
 
 # Object files - TMB exports compiled inline as part of main library
 OBJECTS = detfuns.o distprob.o distr.o get_lik_trans.o get_mlogit.o \

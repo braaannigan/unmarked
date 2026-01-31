@@ -253,7 +253,7 @@ IDS <- function(lambdaformula = ~1,
   )
 
   tmb_obj <- TMB::MakeADFun(data = c(model = "tmb_IDS", tmb_dat), parameters = params_tmb,
-                            DLL = "unmarked_TMBExports", silent=TRUE)
+                            DLL = "unmarked", silent=TRUE)
 
   opt <- optim(unlist(params_tmb), fn=tmb_obj$fn, gr=tmb_obj$gr, method=method, ...)
 

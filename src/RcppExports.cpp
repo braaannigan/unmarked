@@ -591,5 +591,6 @@ static const R_CallMethodDef CallEntries[] = {
 
 RcppExport void R_init_unmarked(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-    R_useDynamicSymbols(dll, FALSE);
+    // Allow dynamic symbol lookup for TMB functions (getParameterOrder, MakeADFunObject, etc.)
+    R_useDynamicSymbols(dll, TRUE);
 }

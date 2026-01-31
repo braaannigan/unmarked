@@ -69,7 +69,7 @@ colext <- function(psiformula = ~ 1, gammaformula = ~ 1,
 
   tmb_obj <- TMB::MakeADFun(data = c(model = "tmb_colext", tmb_dat), 
                             parameters = tmb_pars,
-                            DLL = "unmarked_TMBExports", silent=TRUE)
+                            DLL = "unmarked", silent=TRUE)
   
   opt <- optim(unlist(tmb_pars), fn=tmb_obj$fn, gr=tmb_obj$gr, 
                method=method, hessian = se, ...)
