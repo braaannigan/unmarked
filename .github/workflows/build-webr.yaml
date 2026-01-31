@@ -34,23 +34,68 @@ jobs:
       
       - name: Install dependencies
         run: |
-          Rscript -e 'install.packages(c("Rcpp", "reformulas", "RcppArmadillo", "RcppEigen", "lattice", "MASS", "Matrix", "TMB"), repos="https://repo.r-wasm.org")'
+          # Install packages one at a time with verbose output
+          Rscript -e '
+            options(repos = c(CRAN = "https://repo.r-wasm.org"))
+            
+            pkgs <- c("lattice", "MASS", "Matrix", "Rcpp", "RcppArmadillo", "RcppEigen", "reformulas", "TMB")
+            
+            for (pkg in pkgs) {
+              cat("\n=== Installing", pkg, "===\n")
+              tryCatch({
+                install.packages(pkg, verbose = TRUE)
+                cat("SUCCESS:", pkg, "\n")
+              }, error = function(e) {
+                cat("FAILED:", pkg, "-", conditionMessage(e), "\n")
+                # Retry once
+                cat("Retrying", pkg, "...\n")
+                Sys.sleep(5)
+                install.packages(pkg, verbose = TRUE)
+              })
+            }
+            
+            # Verify installations
+            cat("\n=== Installed packages ===\n")
+            print(installed.packages()[, c("Package", "Version")])
+          '
+      
+      - name: Check TMB installation
+        run: |
+          Rscript -e '
+            if (!requireNamespace("TMB", quietly = TRUE)) {
+              cat("TMB not found, trying alternative installation...\n")
+              # Try downloading directly
+              options(timeout = 300)
+              install.packages("TMB", repos = "https://repo.r-wasm.org", type = "source")
+            }
+            library(TMB)
+            cat("TMB version:", as.character(packageVersion("TMB")), "\n")
+          '
       
       - name: Build binary package
         run: |
           R CMD INSTALL --build unmarked_*.tar.gz
-          ls -la *.tgz || ls -la *.tar.gz
+          ls -la
       
       - name: Create package repository structure
         run: |
           mkdir -p repo/bin/emscripten/contrib/4.5
-          cp unmarked_*.tgz repo/bin/emscripten/contrib/4.5/ 2>/dev/null || cp unmarked_*.tar.gz repo/bin/emscripten/contrib/4.5/
+          
+          # Find and copy the built package
+          if [ -f unmarked_*.tgz ]; then
+            cp unmarked_*.tgz repo/bin/emscripten/contrib/4.5/
+          else
+            cp unmarked_*.tar.gz repo/bin/emscripten/contrib/4.5/
+          fi
+          
+          # Get version from DESCRIPTION
+          VERSION=$(grep "^Version:" DESCRIPTION | sed 's/Version: //')
           
           # Create PACKAGES file
           cd repo/bin/emscripten/contrib/4.5
-          cat > PACKAGES << 'EOF'
+          cat > PACKAGES << EOF
           Package: unmarked
-          Version: 1.5.1.9002
+          Version: ${VERSION}
           Depends: R (>= 4.0)
           Imports: graphics, lattice, MASS, Matrix, methods, parallel, Rcpp (>= 0.8.0), reformulas, stats, TMB (>= 1.7.18), utils
           LinkingTo: Rcpp, RcppArmadillo, TMB, RcppEigen
@@ -58,6 +103,8 @@ jobs:
           NeedsCompilation: yes
           EOF
           
+          cat PACKAGES
+          ls -la
           cd ../../../../..
       
       - name: Create test page
@@ -76,11 +123,15 @@ jobs:
                   #output { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
                   button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; margin: 5px; }
                   button:disabled { background: #6c757d; }
+                  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
               </style>
           </head>
           <body>
               <h1>unmarked for webR</h1>
-              <p>This page lets you test the <code>unmarked</code> R package running in your browser via webR.</p>
+              <p>Test the <code>unmarked</code> R package running in your browser via webR.</p>
+              
+              <h3>Installation</h3>
+              <pre style="background:#f4f4f4;padding:15px;border-radius:8px;">webr::install("unmarked", repos = "https://braaannigan.github.io/unmarked")</pre>
               
               <div id="status" class="loading">Loading webR...</div>
               
