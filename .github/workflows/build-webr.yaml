@@ -17,88 +17,47 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/r-wasm/webr:main
     
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Build source package
-        run: |
-          cd ..
-          R CMD build --no-build-vignettes unmarked
-          mv unmarked_*.tar.gz unmarked/
-          cd unmarked
-          ls -la *.tar.gz
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4'
       
-      - name: Download all dependencies with curl
+      - name: Setup R-wasm
+        uses: r-wasm/actions/setup-rwasm@main
+      
+      - name: Build webR package
+        shell: Rscript {0}
+        run: |
+          # Build the package for webR
+          rwasm::build(".")
+      
+      - name: Create package repository
         shell: bash
         run: |
-          mkdir -p /tmp/pkgs
-          cd /tmp/pkgs
+          mkdir -p repo/bin/emscripten/contrib/4.4
+          cp *.tgz repo/bin/emscripten/contrib/4.4/ 2>/dev/null || cp _build/*.tgz repo/bin/emscripten/contrib/4.4/ 2>/dev/null || true
           
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o lattice.tar.gz "https://repo.r-wasm.org/src/contrib/lattice_0.22-7.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o MASS.tar.gz "https://repo.r-wasm.org/src/contrib/MASS_7.3-65.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o Matrix.tar.gz "https://repo.r-wasm.org/src/contrib/Matrix_1.7-4.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o Rcpp.tar.gz "https://repo.r-wasm.org/src/contrib/Rcpp_1.1.0.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o RcppEigen.tar.gz "https://repo.r-wasm.org/src/contrib/RcppEigen_0.3.4.0.2.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o RcppArmadillo.tar.gz "https://repo.r-wasm.org/src/contrib/RcppArmadillo_15.2.3-1.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o rbibutils.tar.gz "https://repo.r-wasm.org/src/contrib/rbibutils_2.4.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o Rdpack.tar.gz "https://repo.r-wasm.org/src/contrib/Rdpack_2.6.4.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o reformulas.tar.gz "https://repo.r-wasm.org/src/contrib/reformulas_0.4.3.tar.gz"
-          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o TMB.tar.gz "https://repo.r-wasm.org/src/contrib/TMB_1.9.11.tar.gz"
+          # Find the built package
+          find . -name "unmarked*.tgz" -exec cp {} repo/bin/emscripten/contrib/4.4/ \;
           
-          echo "=== Downloaded files ==="
-          ls -la /tmp/pkgs/
-      
-      - name: Install dependencies in order
-        shell: bash
-        run: |
-          cd /tmp/pkgs
-          
-          echo "=== Installing lattice ===" && R CMD INSTALL lattice.tar.gz
-          echo "=== Installing MASS ===" && R CMD INSTALL MASS.tar.gz
-          echo "=== Installing Matrix ===" && R CMD INSTALL Matrix.tar.gz
-          echo "=== Installing Rcpp ===" && R CMD INSTALL Rcpp.tar.gz
-          echo "=== Installing RcppEigen ===" && R CMD INSTALL RcppEigen.tar.gz
-          echo "=== Installing RcppArmadillo ===" && R CMD INSTALL RcppArmadillo.tar.gz
-          echo "=== Installing rbibutils ===" && R CMD INSTALL rbibutils.tar.gz
-          echo "=== Installing Rdpack ===" && R CMD INSTALL Rdpack.tar.gz
-          echo "=== Installing reformulas ===" && R CMD INSTALL reformulas.tar.gz
-          echo "=== Installing TMB ===" && R CMD INSTALL TMB.tar.gz
-      
-      - name: Verify installations
-        run: |
-          Rscript -e '
-            required <- c("lattice", "MASS", "Matrix", "Rcpp", "RcppEigen", "RcppArmadillo", "reformulas", "TMB")
-            for (pkg in required) {
-              if (requireNamespace(pkg, quietly = TRUE)) {
-                cat("OK:", pkg, "version", as.character(packageVersion(pkg)), "\n")
-              } else {
-                stop(paste("MISSING:", pkg))
-              }
-            }
-          '
-      
-      - name: Build binary package
-        run: |
-          R CMD INSTALL --build unmarked_*.tar.gz
-          ls -la
-      
-      - name: Create package repository structure
-        run: |
-          mkdir -p repo/bin/emscripten/contrib/4.5
-          cp unmarked_*.tgz repo/bin/emscripten/contrib/4.5/ 2>/dev/null || cp unmarked_*.tar.gz repo/bin/emscripten/contrib/4.5/
           VERSION=$(grep "^Version:" DESCRIPTION | sed 's/Version: //')
-          cd repo/bin/emscripten/contrib/4.5
+          cd repo/bin/emscripten/contrib/4.4
+          
           echo "Package: unmarked" > PACKAGES
           echo "Version: ${VERSION}" >> PACKAGES
           echo "Depends: R (>= 4.0)" >> PACKAGES
           echo "Imports: graphics, lattice, MASS, Matrix, methods, parallel, Rcpp, reformulas, stats, TMB, utils" >> PACKAGES
           echo "LinkingTo: Rcpp, RcppArmadillo, TMB, RcppEigen" >> PACKAGES
           echo "NeedsCompilation: yes" >> PACKAGES
+          
+          echo "=== PACKAGES file ==="
           cat PACKAGES
+          echo "=== Files ==="
           ls -la
       
       - name: Create test page
