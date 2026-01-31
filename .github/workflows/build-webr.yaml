@@ -33,65 +33,40 @@ jobs:
           ls -la *.tar.gz
       
       - name: Download all dependencies with curl
+        shell: bash
         run: |
           mkdir -p /tmp/pkgs
           cd /tmp/pkgs
           
-          # Hardcoded URLs with exact versions from repo.r-wasm.org
-          PACKAGES=(
-            "https://repo.r-wasm.org/src/contrib/lattice_0.22-7.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/MASS_7.3-65.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/Matrix_1.7-4.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/Rcpp_1.1.0.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/RcppEigen_0.3.4.0.2.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/RcppArmadillo_15.2.3-1.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/rbibutils_2.4.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/Rdpack_2.6.4.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/reformulas_0.4.3.tar.gz"
-            "https://repo.r-wasm.org/src/contrib/TMB_1.9.11.tar.gz"
-          )
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o lattice.tar.gz "https://repo.r-wasm.org/src/contrib/lattice_0.22-7.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o MASS.tar.gz "https://repo.r-wasm.org/src/contrib/MASS_7.3-65.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o Matrix.tar.gz "https://repo.r-wasm.org/src/contrib/Matrix_1.7-4.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o Rcpp.tar.gz "https://repo.r-wasm.org/src/contrib/Rcpp_1.1.0.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o RcppEigen.tar.gz "https://repo.r-wasm.org/src/contrib/RcppEigen_0.3.4.0.2.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o RcppArmadillo.tar.gz "https://repo.r-wasm.org/src/contrib/RcppArmadillo_15.2.3-1.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o rbibutils.tar.gz "https://repo.r-wasm.org/src/contrib/rbibutils_2.4.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o Rdpack.tar.gz "https://repo.r-wasm.org/src/contrib/Rdpack_2.6.4.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o reformulas.tar.gz "https://repo.r-wasm.org/src/contrib/reformulas_0.4.3.tar.gz"
+          curl -L -f --retry 5 --retry-delay 10 -H "User-Agent: Mozilla/5.0" -o TMB.tar.gz "https://repo.r-wasm.org/src/contrib/TMB_1.9.11.tar.gz"
           
-          for url in "${PACKAGES[@]}"; do
-            filename=$(basename "$url")
-            echo "=== Downloading $filename ==="
-            curl -L -f --retry 5 --retry-delay 10 --retry-all-errors \
-              -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" \
-              -H "Accept: */*" \
-              -o "$filename" "$url" && echo "SUCCESS: $filename" || echo "FAILED: $filename"
-          done
-          
-          echo ""
           echo "=== Downloaded files ==="
           ls -la /tmp/pkgs/
       
       - name: Install dependencies in order
+        shell: bash
         run: |
           cd /tmp/pkgs
           
-          # Install in correct dependency order
-          INSTALL_ORDER=(
-            "lattice_0.22-7.tar.gz"
-            "MASS_7.3-65.tar.gz"
-            "Matrix_1.7-4.tar.gz"
-            "Rcpp_1.1.0.tar.gz"
-            "RcppEigen_0.3.4.0.2.tar.gz"
-            "RcppArmadillo_15.2.3-1.tar.gz"
-            "rbibutils_2.4.tar.gz"
-            "Rdpack_2.6.4.tar.gz"
-            "reformulas_0.4.3.tar.gz"
-            "TMB_1.9.11.tar.gz"
-          )
-          
-          for pkg in "${INSTALL_ORDER[@]}"; do
-            if [ -f "$pkg" ]; then
-              echo "=== Installing $pkg ==="
-              R CMD INSTALL "$pkg" 2>&1 || { echo "FAILED: $pkg"; exit 1; }
-              echo "SUCCESS: $pkg"
-            else
-              echo "ERROR: $pkg not found!"
-              exit 1
-            fi
-          done
+          echo "=== Installing lattice ===" && R CMD INSTALL lattice.tar.gz
+          echo "=== Installing MASS ===" && R CMD INSTALL MASS.tar.gz
+          echo "=== Installing Matrix ===" && R CMD INSTALL Matrix.tar.gz
+          echo "=== Installing Rcpp ===" && R CMD INSTALL Rcpp.tar.gz
+          echo "=== Installing RcppEigen ===" && R CMD INSTALL RcppEigen.tar.gz
+          echo "=== Installing RcppArmadillo ===" && R CMD INSTALL RcppArmadillo.tar.gz
+          echo "=== Installing rbibutils ===" && R CMD INSTALL rbibutils.tar.gz
+          echo "=== Installing Rdpack ===" && R CMD INSTALL Rdpack.tar.gz
+          echo "=== Installing reformulas ===" && R CMD INSTALL reformulas.tar.gz
+          echo "=== Installing TMB ===" && R CMD INSTALL TMB.tar.gz
       
       - name: Verify installations
         run: |
@@ -114,34 +89,20 @@ jobs:
       - name: Create package repository structure
         run: |
           mkdir -p repo/bin/emscripten/contrib/4.5
-          
-          # Find and copy the built package
-          if [ -f unmarked_*.tgz ]; then
-            cp unmarked_*.tgz repo/bin/emscripten/contrib/4.5/
-          else
-            cp unmarked_*.tar.gz repo/bin/emscripten/contrib/4.5/
-          fi
-          
-          # Get version from DESCRIPTION
+          cp unmarked_*.tgz repo/bin/emscripten/contrib/4.5/ 2>/dev/null || cp unmarked_*.tar.gz repo/bin/emscripten/contrib/4.5/
           VERSION=$(grep "^Version:" DESCRIPTION | sed 's/Version: //')
-          
-          # Create PACKAGES file
           cd repo/bin/emscripten/contrib/4.5
-          cat > PACKAGES << EOF
-          Package: unmarked
-          Version: ${VERSION}
-          Depends: R (>= 4.0)
-          Imports: graphics, lattice, MASS, Matrix, methods, parallel, Rcpp (>= 0.8.0), reformulas, stats, TMB (>= 1.7.18), utils
-          LinkingTo: Rcpp, RcppArmadillo, TMB, RcppEigen
-          License: GPL (>=3)
-          NeedsCompilation: yes
-          EOF
-          
+          echo "Package: unmarked" > PACKAGES
+          echo "Version: ${VERSION}" >> PACKAGES
+          echo "Depends: R (>= 4.0)" >> PACKAGES
+          echo "Imports: graphics, lattice, MASS, Matrix, methods, parallel, Rcpp, reformulas, stats, TMB, utils" >> PACKAGES
+          echo "LinkingTo: Rcpp, RcppArmadillo, TMB, RcppEigen" >> PACKAGES
+          echo "NeedsCompilation: yes" >> PACKAGES
           cat PACKAGES
           ls -la
-          cd ../../../../..
       
       - name: Create test page
+        shell: bash
         run: |
           cat > repo/index.html << 'HTMLEOF'
           <!DOCTYPE html>
@@ -149,110 +110,71 @@ jobs:
           <head>
               <title>unmarked for webR</title>
               <style>
-                  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+                  body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
                   #status { padding: 15px; border-radius: 8px; margin: 20px 0; }
                   .loading { background: #fff3cd; border: 1px solid #ffc107; }
                   .success { background: #d4edda; border: 1px solid #28a745; }
                   .error { background: #f8d7da; border: 1px solid #dc3545; }
-                  #output { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+                  #output { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
                   button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; margin: 5px; }
                   button:disabled { background: #6c757d; }
-                  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
               </style>
           </head>
           <body>
               <h1>unmarked for webR</h1>
-              <p>Test the <code>unmarked</code> R package running in your browser via webR.</p>
-              
+              <p>Test <code>unmarked</code> in your browser via webR.</p>
               <h3>Installation</h3>
-              <pre style="background:#f4f4f4;padding:15px;border-radius:8px;">webr::install("unmarked", repos = "https://braaannigan.github.io/unmarked")</pre>
-              
+              <pre style="background:#f4f4f4;padding:15px;">webr::install("unmarked", repos = "https://braaannigan.github.io/unmarked")</pre>
               <div id="status" class="loading">Loading webR...</div>
-              
-              <div>
-                  <button id="testBtn" onclick="runTest()" disabled>Run Occupancy Model</button>
-                  <button id="tmbBtn" onclick="runTMBTest()" disabled>Test TMB Engine</button>
-              </div>
-              
+              <button id="testBtn" onclick="runTest()" disabled>Run Occupancy Model</button>
+              <button id="tmbBtn" onclick="runTMBTest()" disabled>Test TMB Engine</button>
               <h3>Output:</h3>
               <pre id="output">Initializing...</pre>
-
               <script type="module">
                   import { WebR } from 'https://webr.r-wasm.org/latest/webr.mjs';
-                  
                   const output = document.getElementById('output');
                   const status = document.getElementById('status');
                   const webR = new WebR();
                   window.webR = webR;
-                  
-                  function log(msg) {
-                      output.textContent += msg + '\n';
-                      output.scrollTop = output.scrollHeight;
-                  }
-                  
+                  function log(msg) { output.textContent += msg + '\n'; output.scrollTop = output.scrollHeight; }
                   async function init() {
                       try {
                           await webR.init();
-                          log('✓ webR initialized');
-                          
+                          log('webR initialized');
                           status.textContent = 'Installing dependencies...';
-                          const deps = ['lattice', 'MASS', 'Matrix', 'Rcpp', 'reformulas', 'TMB', 'RcppArmadillo', 'RcppEigen'];
-                          for (const pkg of deps) {
-                              log(`Installing ${pkg}...`);
+                          for (const pkg of ['lattice','MASS','Matrix','Rcpp','reformulas','TMB','RcppArmadillo','RcppEigen']) {
+                              log('Installing ' + pkg + '...');
                               await webR.installPackages([pkg]);
                           }
-                          log('✓ Dependencies installed');
-                          
                           status.textContent = 'Installing unmarked...';
                           const repoUrl = window.location.href.replace(/\/index\.html$/, '').replace(/\/$/, '');
                           await webR.installPackages(['unmarked'], { repos: [repoUrl] });
-                          log('✓ unmarked installed');
-                          
                           await webR.evalR('library(unmarked)');
-                          log('✓ library(unmarked) loaded!');
-                          
+                          log('unmarked loaded!');
                           status.className = 'success';
-                          status.textContent = '✅ Ready! Click a button to run a test.';
+                          status.textContent = 'Ready!';
                           document.getElementById('testBtn').disabled = false;
                           document.getElementById('tmbBtn').disabled = false;
-                          
                       } catch (err) {
                           status.className = 'error';
-                          status.textContent = '❌ Error: ' + err.message;
+                          status.textContent = 'Error: ' + err.message;
                           log('ERROR: ' + err.message);
                       }
                   }
-                  
                   window.runTest = async function() {
-                      output.textContent = 'Running occupancy model...\n';
+                      output.textContent = 'Running...\n';
                       try {
-                          const result = await webR.evalR(`
-                              set.seed(123)
-                              y <- matrix(rbinom(300, 1, 0.3), 100, 3)
-                              umf <- unmarkedFrameOccu(y = y)
-                              fm <- occu(~1 ~1, data = umf)
-                              capture.output(print(fm))
-                          `);
-                          log((await result.toArray()).join('\n'));
-                          log('\n✓ Test passed!');
-                      } catch (err) { log('ERROR: ' + err.message); }
+                          const r = await webR.evalR('set.seed(123);y<-matrix(rbinom(300,1,0.3),100,3);umf<-unmarkedFrameOccu(y=y);fm<-occu(~1~1,data=umf);capture.output(print(fm))');
+                          log((await r.toArray()).join('\n') + '\nTest passed!');
+                      } catch (e) { log('ERROR: ' + e.message); }
                   };
-                  
                   window.runTMBTest = async function() {
-                      output.textContent = 'Running TMB engine test...\n';
+                      output.textContent = 'Running TMB test...\n';
                       try {
-                          const result = await webR.evalR(`
-                              set.seed(123)
-                              y <- matrix(rbinom(300, 1, 0.3), 100, 3)
-                              umf <- unmarkedFrameOccu(y = y)
-                              fm <- occu(~1 ~1, data = umf, engine = "TMB")
-                              capture.output(print(fm))
-                          `);
-                          log((await result.toArray()).join('\n'));
-                          log('\n✓ TMB test passed!');
-                      } catch (err) { log('ERROR: ' + err.message); }
+                          const r = await webR.evalR('set.seed(123);y<-matrix(rbinom(300,1,0.3),100,3);umf<-unmarkedFrameOccu(y=y);fm<-occu(~1~1,data=umf,engine="TMB");capture.output(print(fm))');
+                          log((await r.toArray()).join('\n') + '\nTMB test passed!');
+                      } catch (e) { log('ERROR: ' + e.message); }
                   };
-                  
                   init();
               </script>
           </body>
