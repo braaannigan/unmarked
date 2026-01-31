@@ -32,44 +32,53 @@ jobs:
           cd unmarked
           ls -la *.tar.gz
       
-      - name: Install dependencies
+      - name: Download dependencies manually
         run: |
-          # Install packages one at a time with verbose output
-          Rscript -e '
-            options(repos = c(CRAN = "https://repo.r-wasm.org"))
+          mkdir -p /tmp/pkgs
+          cd /tmp/pkgs
+          
+          # Download packages using curl (bypasses R's download.file issues)
+          for pkg in lattice MASS Matrix Rcpp RcppArmadillo RcppEigen reformulas TMB; do
+            echo "=== Downloading $pkg ==="
+            # Get the URL from PACKAGES
+            url="https://repo.r-wasm.org/src/contrib/${pkg}_"
             
-            pkgs <- c("lattice", "MASS", "Matrix", "Rcpp", "RcppArmadillo", "RcppEigen", "reformulas", "TMB")
+            # Use curl with retries and different user agent
+            curl -L -f --retry 3 --retry-delay 5 \
+              -H "User-Agent: Mozilla/5.0 (compatible; GitHubActions)" \
+              -o "${pkg}.tar.gz" \
+              "https://repo.r-wasm.org/src/contrib/$(curl -s https://repo.r-wasm.org/src/contrib/PACKAGES | grep -A1 "^Package: ${pkg}$" | grep Version | sed 's/Version: //' | xargs -I{} echo "${pkg}_{}.tar.gz")" \
+              || echo "Failed to download $pkg"
             
-            for (pkg in pkgs) {
-              cat("\n=== Installing", pkg, "===\n")
-              tryCatch({
-                install.packages(pkg, verbose = TRUE)
-                cat("SUCCESS:", pkg, "\n")
-              }, error = function(e) {
-                cat("FAILED:", pkg, "-", conditionMessage(e), "\n")
-                # Retry once
-                cat("Retrying", pkg, "...\n")
-                Sys.sleep(5)
-                install.packages(pkg, verbose = TRUE)
-              })
-            }
-            
-            # Verify installations
-            cat("\n=== Installed packages ===\n")
-            print(installed.packages()[, c("Package", "Version")])
-          '
+            ls -la "${pkg}.tar.gz" 2>/dev/null || true
+          done
+          
+          ls -la /tmp/pkgs/
       
-      - name: Check TMB installation
+      - name: Install dependencies from local files
+        run: |
+          cd /tmp/pkgs
+          
+          # Install in dependency order
+          for pkg in lattice MASS Matrix Rcpp RcppEigen RcppArmadillo reformulas TMB; do
+            if [ -f "${pkg}.tar.gz" ]; then
+              echo "=== Installing $pkg ==="
+              R CMD INSTALL "${pkg}.tar.gz" || echo "Failed to install $pkg"
+            else
+              echo "=== $pkg not found, trying from repo ==="
+              Rscript -e "install.packages('$pkg', repos='https://repo.r-wasm.org')" || true
+            fi
+          done
+      
+      - name: Verify TMB installation
         run: |
           Rscript -e '
-            if (!requireNamespace("TMB", quietly = TRUE)) {
-              cat("TMB not found, trying alternative installation...\n")
-              # Try downloading directly
-              options(timeout = 300)
-              install.packages("TMB", repos = "https://repo.r-wasm.org", type = "source")
+            if (requireNamespace("TMB", quietly = TRUE)) {
+              library(TMB)
+              cat("TMB version:", as.character(packageVersion("TMB")), "\n")
+            } else {
+              stop("TMB is not installed!")
             }
-            library(TMB)
-            cat("TMB version:", as.character(packageVersion("TMB")), "\n")
           '
       
       - name: Build binary package
